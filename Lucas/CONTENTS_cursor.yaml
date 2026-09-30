@@ -1,0 +1,310 @@
+# AI_READABLE_CATALOG
+# Role: machine-oriented map of the Meridian HR Collective local test database.
+# Audience: retrieval agents, RAG planners, SQL generators, hackathon scoring bots.
+# Not a human policy handbook. Prefer this file over guessing column names.
+
+catalog:
+  name: meridian_hr_file_catalog
+  version: "1.2.0"
+  generated_by: seed.py
+  sqlite_path: data/hr_catalog.sqlite
+  timezone_for_naive_dates: Europe/Brussels
+  language_of_extracted_text: mixed (nl, en, de, fr) — see documents.language_code
+  fiction_notice: >
+    Every person, IBAN, VAT, national-id fragment, salary, and client is synthetic.
+    Treat as production-shaped, not as real PII.
+
+what_is_and_is_not_stored:
+  stored:
+    - Canonical deep links and secondary viewer links (no file bytes, no PDF/DOCX blobs)
+    - SHA-256 of the imaginary original file (integrity handle only)
+    - Faceted tags, typed sorting labels, NER-style entities, OCR/text extracts
+    - Type-specific extracted_json payloads (the densest per-document structure)
+    - Cross-document relations (payslip→contract, invoice→timesheet, annex→master)
+    - Ingestion provenance
+  not_stored:
+    - Original binaries (HR DMS / SharePoint / scanner share hold those)
+    - Full government ID numbers (only last4 + issuing country)
+    - Medical diagnoses (leave docs expose dates and category only)
+    - Bank login credentials, signing certificates, raw email MIME
+
+deep_links:
+  scheme: meridian-dms
+  canonical_template: "meridian-dms://v1/doc/{document_id}?rev={revision}"
+  https_viewer_template: "https://dms.meridian-hr.local/open?id={document_id}&rev={revision}"
+  sharepoint_template: "https://meridianhr.sharepoint.local/sites/people-ops/doc.aspx?unique={document_id}"
+  semantics:
+    - Opening a deep link is out of scope for this SQLite file; the link is the foreign key to the blob store.
+    - document_id is a UUID v4 string. It is stable across regenerations only if seed.py RNG seed is unchanged.
+    - revision increments when a document is superseded; the row you see is the indexed revision.
+  how_to_cite_in_answers: >
+    Always return deep_link plus document_type, client_slug, and classification.
+    Never claim the PDF body is in the database.
+
+core_distinction:
+  tags:
+    definition: >
+      Unordered facets for filtering and grouping. Multi-valued per document.
+      Values are strings from controlled vocabularies (see taxonomies).
+    typical_questions:
+      - "all loan documents for client helix-logistics in BE"
+      - "restricted files from email_ingest in 2024"
+    table: document_tags
+    address_as: "{namespace}.{key} = {value}"
+  sorting_labels:
+    definition: >
+      At most one value per (document, label_key). Typed so ORDER BY / range
+      filters work. Which keys exist depends on document_type (see
+      document_type_profiles).
+    typical_questions:
+      - "payslips with net_pay > 4000 EUR"
+      - "work permits expiring before 2027-01-01"
+    table: sorting_labels
+    type_map:
+      money: value_numeric + currency
+      date: value_date (ISO-8601 calendar date)
+      integer: value_numeric (integral)
+      float: value_numeric
+      enum: value_text
+      boolean: value_text in {true, false}
+      duration_days: value_numeric, unit=day
+  extracted_entities:
+    definition: >
+      Mentions pulled from OCR/text. Many rows per document. Use for
+      "who/what appears", not as the primary sort key (labels are cleaner).
+    table: extracted_entities
+  extracted_json:
+    definition: >
+      Nested, type-specific structured extract (the "as much as possible" layer).
+      Schema varies by document_type; keys are documented under
+      document_type_profiles[].json_payload.
+    column: documents.extracted_json
+
+taxonomies:
+  tag_namespaces:
+    geo:
+      keys: [country, region, work_location_city]
+      country: ISO-3166-1 alpha-2 (NL, BE, DE, GB, US, FR)
+    party:
+      keys: [client_slug, legal_entity_code, employee_number, account_manager]
+    classification:
+      keys: [sensitivity, pii_level, retention_class, legal_hold]
+      sensitivity: [public, internal, confidential, restricted]
+      pii_level: [none, low, standard, high]
+      retention_class: [ephemeral_2y, personnel_7y, payroll_10y, contract_10y, immigration_10y, medical_30y, financial_10y]
+      legal_hold: [none, active]
+    content:
+      keys: [file_type, document_family, language, template_code, signature_status]
+    ops:
+      keys: [source_system, workflow_state, department, cost_center, document_year, quarter]
+      source_system: [employee_portal, recruiter_ats, payroll_engine, email_ingest, scanner_mailroom, legal_esign, finance_erp]
+      workflow_state:
+        - draft
+        - pending_countersignature
+        - executed
+        - pending_approval
+        - approved
+        - paid
+        - disputed
+        - expired
+        - superseded
+        - archived
+      department: [talent, payroll, legal, people_ops, finance, immigration, learning]
+    employment:
+      keys: [role_kind, employment_status, bargaining_unit]
+      role_kind: [employee, contractor, candidate, alumni]
+      employment_status: [active, notice_period, terminated, not_hired, never_started]
+
+  document_families:
+    pre_hire: [candidate_cv, interview_notes, offer_letter, background_check]
+    employment_core: [employment_contract, nda, policy_acknowledgement]
+    compensation: [payslip, loan_document, benefits_enrollment, tax_form]
+    time_and_billing: [timesheet, expense_report, client_invoice]
+    mobility: [id_document, work_permit]
+    talent_cycle: [performance_review, training_certificate]
+    offboarding: [termination_letter, medical_leave]
+
+document_type_profiles:
+  candidate_cv:
+    family: pre_hire
+    sorting_labels: [years_experience, salary_expectation, notice_period_days]
+    json_payload: [headline, skills[], last_employer, education_highest, languages{}, willing_to_relocate]
+    entities: [person, org, job_title, email, phone]
+  interview_notes:
+    family: pre_hire
+    sorting_labels: [recommendation_score, interview_date]
+    json_payload: [round, interviewers[], strengths[], risks[], recommendation]
+    entities: [person, org]
+  offer_letter:
+    family: pre_hire
+    sorting_labels: [offered_annual_salary, proposed_start_date, bonus_target_pct]
+    json_payload: [offer_expiry, equity_note, probation_months, work_pattern]
+    entities: [person, amount, date]
+  background_check:
+    family: pre_hire
+    sorting_labels: [completed_on, result]
+    json_payload: [vendor, checks_run[], adverse_findings_count]
+    entities: [person, org, date]
+  employment_contract:
+    family: employment_core
+    sorting_labels: [annual_salary, hourly_rate, fte, probation_end, notice_period_days]
+    json_payload: [contract_form, scale_step, holiday_hours, non_compete_months, governing_law, signatories[]]
+    entities: [person, org, amount, date, iban]
+  nda:
+    family: employment_core
+    sorting_labels: [term_years, effective_from]
+    json_payload: [mutual, carveouts[], governing_law]
+    entities: [person, org]
+  policy_acknowledgement:
+    family: employment_core
+    sorting_labels: [acknowledged_on, policy_version]
+    json_payload: [policy_code, policy_title, channel]
+    entities: [person]
+  payslip:
+    family: compensation
+    sorting_labels: [gross_pay, net_pay, tax_withheld, hours_worked, period_end]
+    json_payload: [period_start, period_end, earnings_lines[], deduction_lines[], ytd_gross, employer_cost]
+    entities: [person, amount, iban]
+  loan_document:
+    family: compensation
+    sorting_labels: [principal_amount, outstanding_balance, interest_rate_pct, term_months, first_due_date]
+    json_payload: [loan_purpose, amortization, security_interest, early_repay_fee_pct, payroll_deduction]
+    entities: [person, amount, iban, date]
+  benefits_enrollment:
+    family: compensation
+    sorting_labels: [employer_monthly_contribution, employee_monthly_contribution, coverage_start]
+    json_payload: [plan_name, coverage_tier, dependents_count]
+    entities: [person, amount]
+  tax_form:
+    family: compensation
+    sorting_labels: [tax_year, taxable_wage]
+    json_payload: [form_code, withholding_code, filing_status]
+    entities: [person, amount]
+  timesheet:
+    family: time_and_billing
+    sorting_labels: [hours_regular, hours_overtime, billable_amount, period_end]
+    json_payload: [project_codes[], approver, onsite_days]
+    entities: [person, org, amount]
+  expense_report:
+    family: time_and_billing
+    sorting_labels: [claimed_amount, approved_amount, trip_start]
+    json_payload: [lines[{category,amount,receipt_ref}], mileage_km, policy_exceptions]
+    entities: [person, amount, date]
+  client_invoice:
+    family: time_and_billing
+    sorting_labels: [amount_excl_vat, vat_amount, amount_incl_vat, due_date, paid_on]
+    json_payload: [invoice_number, po_number, vat_rate, line_items[], iban_beneficiary]
+    entities: [org, amount, vat, iban, date]
+  id_document:
+    family: mobility
+    sorting_labels: [expiry_date]
+    json_payload: [doc_kind, issuing_country, last4, nationality]
+    entities: [person, date]
+  work_permit:
+    family: mobility
+    sorting_labels: [valid_from, expiry_date]
+    json_payload: [permit_class, sponsor_legal_entity, hours_cap, remarks]
+    entities: [person, org, date]
+  performance_review:
+    family: talent_cycle
+    sorting_labels: [overall_score, cycle_year]
+    json_payload: [competencies{}, goals_met_pct, calibration_band, next_review_month]
+    entities: [person]
+  training_certificate:
+    family: talent_cycle
+    sorting_labels: [credits, valid_until, completed_on]
+    json_payload: [provider, course_code, delivery, exam_passed]
+    entities: [person, org, date]
+  termination_letter:
+    family: offboarding
+    sorting_labels: [last_working_day, severance_amount, garden_leave_days]
+    json_payload: [reason_category, unused_holiday_payout, non_solicit_months]
+    entities: [person, amount, date]
+  medical_leave:
+    family: offboarding
+    sorting_labels: [leave_start, expected_return, occupational_pct]
+    json_payload: [leave_category, sick_pay_scheme, fit_note_on_file]
+    entities: [person, date]
+
+tables:
+  legal_entities:
+    grain: employing company of Meridian (NL BV, BE NV, DE GmbH, …)
+  clients:
+    grain: customer organisation that leases/employs via Meridian
+    slug: kebab-case; also stored as tag party.client_slug
+  people:
+    grain: one natural person in the talent pool or workforce
+    client_id: null for internal Meridian staff and unplaced candidates
+  document_types:
+    grain: controlled file type; label_schema_json mirrors sorting_labels
+  documents:
+    grain: one indexed file revision
+    extracted_text: OCR/plain extract, typically 800–2500 characters (not the full original)
+    status: [draft, active, superseded, archived]
+  document_tags: grain = one facet assignment
+  sorting_labels: grain = one typed sort key
+  extracted_entities: grain = one mention
+  document_relations:
+    relation_type:
+      - supersedes
+      - annex_of
+      - countersigned_copy_of
+      - payslip_for_contract
+      - invoice_for_timesheet
+      - offer_for_cv
+      - permit_supports_contract
+      - loan_referenced_on_payslip
+  ingestion_events: grain = audit row for how the index learned about the file
+
+views:
+  v_documents: denormalised listing for agents that should not join
+  v_money_labels: all monetary sorting labels with client_slug
+
+query_recipes:
+  - id: filter_then_sort
+    intent: "loan documents for a client ordered by principal"
+    sql: |
+      SELECT d.id, d.title, d.deep_link, sl.value_numeric AS principal, sl.currency
+      FROM documents d
+      JOIN sorting_labels sl ON sl.document_id = d.id AND sl.label_key = 'principal_amount'
+      JOIN document_tags t ON t.document_id = d.id AND t.key = 'client_slug' AND t.value = :client
+      WHERE d.document_type = 'loan_document'
+      ORDER BY sl.value_numeric DESC;
+  - id: expiring_permits
+    intent: "immigration risk window"
+    sql: |
+      SELECT d.id, p.preferred_name, sl.value_date AS expiry, d.deep_link
+      FROM documents d
+      JOIN people p ON p.id = d.person_id
+      JOIN sorting_labels sl ON sl.document_id = d.id AND sl.label_key = 'expiry_date'
+      WHERE d.document_type = 'work_permit'
+        AND d.status = 'active'
+        AND sl.value_date <= :horizon
+      ORDER BY sl.value_date;
+  - id: unpack_json
+    intent: "type-specific nested extract"
+    sql: |
+      SELECT id, json_extract(extracted_json, '$.invoice_number') AS invoice_number
+      FROM documents
+      WHERE document_type = 'client_invoice';
+  - id: graph_hop
+    intent: "invoice that bills a timesheet"
+    sql: |
+      SELECT inv.id, inv.deep_link, ts.id AS timesheet_id
+      FROM document_relations r
+      JOIN documents inv ON inv.id = r.from_document_id
+      JOIN documents ts ON ts.id = r.to_document_id
+      WHERE r.relation_type = 'invoice_for_timesheet';
+
+agent_rules:
+  - Prefer document_type + tags for recall; sorting_labels for rank/threshold; extracted_json for detail.
+  - If a requested label is not listed for that document_type, it is absent by design, not missing data.
+  - Classification restricted or pii_level high: still present in this test DB; in production an agent would redact. This dataset is synthetic so fields are populated.
+  - Do not invent file bytes. Quote extracted_text or extracted_json only.
+  - Country on the document may differ from people.home_country (cross-border assignments).
+  - Multiple documents may share person_id and client_id; use issued_on / period labels to disambiguate.
+  - Seed reproducibility: seed.py uses RNG seed 20230930.
+
+regeneration:
+  command: python seed.py
+  requirements: Python 3.10+ stdlib only (sqlite3, json, hashlib, uuid, random, datetime, pathlib)

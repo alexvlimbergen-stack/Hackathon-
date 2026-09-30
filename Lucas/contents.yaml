@@ -1,0 +1,183 @@
+# AI-readable contract for the document catalogue.
+# Add/change document types and fields without changing ingest.py.
+
+document_types:
+  candidate_cv:
+    description: "Candidate CV or resume"
+    labels:
+      - years_experience
+      - salary_expectation
+      - notice_period_days
+      - country
+      - candidate_name
+
+  interview_notes:
+    description: "Interview notes"
+    labels:
+      - recommendation_score
+      - interview_date
+      - interviewer
+      - candidate_name
+
+  offer_letter:
+    description: "Employment offer letter"
+    labels:
+      - offered_annual_salary
+      - proposed_start_date
+      - bonus_target_pct
+      - currency
+      - candidate_name
+
+  background_check:
+    description: "Background check report"
+    labels:
+      - completed_on
+      - result
+      - candidate_name
+
+  employment_contract:
+    description: "Employment contract"
+    labels:
+      - annual_salary
+      - hourly_rate
+      - fte
+      - probation_end
+      - notice_period_days
+      - start_date
+      - end_date
+      - currency
+      - employee_name
+
+  nda:
+    description: "Non-disclosure agreement"
+    labels:
+      - term_years
+      - effective_from
+      - employee_name
+
+  payslip:
+    description: "Payroll payslip"
+    labels:
+      - gross_pay
+      - net_pay
+      - tax_withheld
+      - hours_worked
+      - period_end
+      - currency
+      - employee_name
+
+  loan_document:
+    description: "Employee loan agreement"
+    labels:
+      - principal_amount
+      - outstanding_balance
+      - interest_rate_pct
+      - term_months
+      - first_due_date
+      - currency
+      - employee_name
+
+  benefits_enrollment:
+    description: "Benefits enrollment"
+    labels:
+      - employer_monthly_contribution
+      - employee_monthly_contribution
+      - coverage_start
+      - employee_name
+
+  tax_form:
+    description: "Tax form"
+    labels:
+      - tax_year
+      - taxable_wage
+      - currency
+      - employee_name
+
+  timesheet:
+    description: "Timesheet"
+    labels:
+      - hours_regular
+      - hours_overtime
+      - billable_amount
+      - period_end
+      - employee_name
+
+  expense_report:
+    description: "Employee expense report"
+    labels:
+      - claimed_amount
+      - approved_amount
+      - trip_start
+      - currency
+      - employee_name
+
+  client_invoice:
+    description: "Client invoice"
+    labels:
+      - amount_excl_vat
+      - vat_amount
+      - amount_incl_vat
+      - due_date
+      - paid_on
+      - currency
+      - client_name
+
+  id_document:
+    description: "Identity document copy"
+    labels:
+      - expiry_date
+      - country
+      - employee_name
+
+  work_permit:
+    description: "Work permit or residence permit"
+    labels:
+      - valid_from
+      - expiry_date
+      - country
+      - employee_name
+
+  performance_review:
+    description: "Performance review"
+    labels:
+      - overall_score
+      - cycle_year
+      - employee_name
+
+  training_certificate:
+    description: "Training certificate"
+    labels:
+      - credits
+      - valid_until
+      - completed_on
+      - employee_name
+
+  termination_letter:
+    description: "Termination letter"
+    labels:
+      - last_working_day
+      - severance_amount
+      - garden_leave_days
+      - currency
+      - employee_name
+
+  medical_leave:
+    description: "Medical leave file"
+    labels:
+      - leave_start
+      - expected_return
+      - occupational_pct
+      - employee_name
+
+# Generic labels that should be considered whenever they are present.
+global_labels:
+  - country
+  - employee_name
+  - candidate_name
+  - client_name
+  - currency
+
+duplicate_detection:
+  exact_hash: true
+  fuzzy_text_similarity_threshold: 0.94
+  compare_same_document_type: true

@@ -1,0 +1,7 @@
+boto3>=1.35
+PyYAML>=6.0
+pypdf>=5.0
+python-docx>=1.1
+Pillow>=10.0
+requests>=2.32
+rapidfuzz>=3.9
